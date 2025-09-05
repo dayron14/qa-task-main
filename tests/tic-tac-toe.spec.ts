@@ -93,18 +93,34 @@ test.describe('Tic Tac Toe — History & Time Travel', () => {
         await expect(statusLine(page)).toContainText(/next player:\s*X/i);
     });
 
-    test('@regression time travel behavior - preserves all history', async ({ page }) => {
-        // CURRENT BEHAVIOR: History is preserved after branching
-        // QUESTION FOR STAKEHOLDERS: Is this the intended UX?
-        // Alternative: Should branching truncate future history (Git-style)?
+    test('@regression new move after time travel truncates future history', async ({ page }) => {
+        // Standard Git-style behavior: Time travel + new move truncates future history
+        await makeMoves(page, [0, 4, 1]);           // three moves (should have 4 history items: start + 3 moves)
+        await expect(historyList(page).locator('li')).toHaveCount(4);
         
-        await makeMoves(page, [0, 4, 1]);
-        await historyButtonAt(page, 1).click(); // after move #1
-        await square(page, 2).click();          // branch
-        const text = await historyList(page).innerText();
+        await historyButtonAt(page, 1).click();     // back to after move #1
+        await square(page, 2).click();              // branch with new move
         
-        // Document current behavior (history preservation)
-        expect(text).toContain('move #2'); // Old timeline preserved
-        expect(text).toContain('Go to move #2'); // New branch created
+        // After branching, should only have 3 history items: start + move #1 + new move
+        // The original moves #2 and #3 should be truncated
+        await expect(historyList(page).locator('li')).toHaveCount(3);
+    });
+
+    test('@regression history buttons should display correct move numbers', async ({ page }) => {
+        // FAILING TEST: Documents expected behavior for Game.tsx line 90 bug fix
+        // Current: description = 'Go to move # move' 
+        // Should be: description = `Go to move #${move}`
+        
+        await makeMoves(page, [0, 4, 1]); // Make 3 moves to generate history
+        
+        const historyText = await historyList(page).innerText();
+        
+        // Expected behavior: History should show actual move numbers
+        expect(historyText).toContain('Go to move #1');
+        expect(historyText).toContain('Go to move #2'); 
+        expect(historyText).toContain('Go to move #3');
+        
+        // Should NOT contain the buggy literal string
+        expect(historyText).not.toContain('Go to move # move');
     });
 });
